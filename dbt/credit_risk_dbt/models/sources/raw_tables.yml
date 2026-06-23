@@ -1,0 +1,10 @@
+version: 2
+
+sources:
+  - name: raw_tables
+    database: credit-risk-modelling-499009
+    schema: raw_tables
+
+    tables:
+      - name: loan_status_2007_2023
+        description: Lending Club historical loan performance data
