@@ -1,0 +1,3 @@
+project_id: "credit-risk-modelling-499009"
+dataset: "raw_tables"
+write_mode: "append"
