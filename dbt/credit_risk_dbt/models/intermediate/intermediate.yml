@@ -1,0 +1,85 @@
+version: 2
+
+models:
+
+  - name: intermediate_default_target
+    description: Binary target variable used for probability of default modeling.
+
+    columns:
+
+      - name: id
+        description: Unique loan identifier.
+        tests:
+          - not_null
+          - unique
+
+      - name: loan_status
+        description: Original Lending Club loan status.
+
+      - name: default_flag
+        description: Binary target variable where 1 indicates default.
+        tests:
+          - accepted_values:
+              values: [0, 1]
+
+  - name: intermediate_credit_risk_features
+    description: Analytical base table containing raw and engineered features for PD model development.
+
+    columns:
+
+      - name: id
+        description: Unique loan identifier.
+        tests:
+          - not_null
+          - unique
+
+      - name: credit_history_months
+        description: Months between loan issue date and earliest reported credit line.
+
+      - name: loan_to_income_ratio
+        description: Loan amount divided by annual income.
+
+      - name: installment_income_ratio
+        description: Monthly installment divided by annual income.
+
+      - name: funded_to_income_ratio
+        description: Funded amount divided by annual income.
+
+      - name: fico_change
+        description: Difference between current and origination FICO score.
+
+      - name: delinquency_flag
+        description: Indicates borrower has historical delinquencies.
+
+      - name: recent_inquiry_flag
+        description: Indicates recent credit inquiries.
+
+      - name: high_utilization_flag
+        description: Indicates revolving utilization above 80 percent.
+
+      - name: thin_file_flag
+        description: Indicates fewer than five total credit accounts.
+
+      - name: mortgage_flag
+        description: Indicates presence of mortgage accounts.
+
+      - name: employment_stability_flag
+        description: Indicates employment length of at least five years.
+
+      - name: fico_band
+        description: Categorized FICO score band.
+
+      - name: high_dti_flag
+        description: Indicates debt-to-income ratio above 40 percent.
+
+      - name: revolving_balance_ratio
+        description: Revolving balance divided by revolving credit limit.
+
+      - name: balance_to_limit_ratio
+        description: Current balance divided by bankcard limit.
+
+      - name: subprime_flag
+        description: Indicates borrower FICO score below 660.
+
+  - name: intermediate_feature_quality
+    description: Summary table monitoring completeness and quality of model features.

@@ -1,0 +1,17 @@
+credit_risk_dbt:
+
+  target: dev
+
+  outputs:
+
+    dev:
+      type: bigquery
+      method: oauth
+
+      project: credit-risk-modelling-499009
+      dataset: staging
+
+      threads: 4
+      timeout_seconds: 300
+      location: US
+      priority: interactive

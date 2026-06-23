@@ -1,0 +1,604 @@
+version: 2
+
+models:
+
+  - name: staging_loan_core
+    description: Core loan application, loan origination and loan performance attributes.
+
+    columns:
+      - name: id
+        description: Unique Lending Club assigned identifier for the loan.
+        tests:
+          - not_null
+          - unique
+
+      - name: loan_amnt
+        description: Listed amount of the loan applied for by the borrower.
+
+      - name: funded_amnt
+        description: Total amount committed to the loan.
+
+      - name: funded_amnt_inv
+        description: Total amount committed by investors.
+
+      - name: term
+        description: Loan term in months.
+
+      - name: int_rate_pct
+        description: Interest rate percentage converted from string format.
+
+      - name: installment
+        description: Monthly payment owed by the borrower.
+
+      - name: grade
+        description: Lending Club assigned loan grade.
+
+      - name: sub_grade
+        description: Lending Club assigned loan sub-grade.
+
+      - name: loan_status
+        description: Current status of the loan.
+
+      - name: purpose
+        description: Borrower supplied purpose for the loan.
+
+      - name: title
+        description: Borrower supplied loan title.
+
+      - name: pymnt_plan
+        description: Indicates whether a payment plan exists.
+
+      - name: application_type
+        description: Individual or joint loan application.
+
+      - name: initial_list_status
+        description: Initial listing status of the loan.
+
+      - name: policy_code
+        description: Lending Club policy code.
+
+      - name: loan_status
+        tests:
+          - not_null
+
+      - name: grade
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - A
+                  - B
+                  - C
+                  - D
+                  - E
+                  - F
+                  - G
+
+      - name: application_type
+        tests:
+          - accepted_values:
+              arguments:
+                values:
+                  - Individual
+                  - Joint App
+
+      - name: loan_amnt
+        tests:
+          - not_null
+
+      - name: funded_amnt
+        tests:
+          - not_null
+
+      - name: funded_amnt_inv
+        tests:
+          - not_null
+
+      - name: installment
+        tests:
+          - not_null
+
+      - name: int_rate_pct
+        tests:
+          - not_null
+
+      - name: loan_amnt
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+
+      - name: funded_amnt
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+
+      - name: funded_amnt_inv
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+
+      - name: installment
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+
+      - name: int_rate_pct
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                max_value: 100
+
+  - name: staging_borrower
+    description: Borrower employment, income and demographic attributes.
+
+    columns:
+      - name: id
+        description: Loan identifier.
+
+      - name: emp_title
+        description: Borrower job title.
+
+      - name: emp_length
+        description: Original employment length value.
+
+      - name: emp_length_years
+        description: Employment length standardized to years.
+
+      - name: annual_inc
+        description: Self-reported annual income.
+
+      - name: verification_status
+        description: Income verification status.
+
+      - name: home_ownership
+        description: Home ownership status.
+
+      - name: zip_code
+        description: First three digits of borrower's ZIP code.
+
+      - name: addr_state
+        description: Borrower state.
+
+      - name: dti
+        description: Debt-to-income ratio.
+
+      - name: id
+        tests:
+          - relationships:
+              arguments:
+                to: ref('staging_loan_core')
+                field: id
+
+      - name: annual_inc
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+
+  - name: staging_dates
+    description: Standardized date attributes converted to BigQuery DATE format.
+
+    columns:
+      - name: id
+        description: Loan identifier.
+
+      - name: issue_date
+        description: Date loan was funded.
+
+      - name: earliest_credit_line_date
+        description: Earliest reported credit line date.
+
+      - name: last_payment_date
+        description: Most recent payment date.
+
+      - name: next_payment_date
+        description: Next scheduled payment date.
+
+      - name: last_credit_pull_date
+        description: Most recent credit pull date.
+
+      - name: sec_app_earliest_credit_line_date
+        description: Earliest credit line date for secondary applicant.
+
+      - name: hardship_start_date
+        description: Start date of hardship plan.
+
+      - name: hardship_end_date
+        description: End date of hardship plan.
+
+      - name: payment_plan_start_date
+        description: First hardship payment due date.
+
+      - name: id
+        tests:
+          - relationships:
+              arguments:
+                to: ref('staging_loan_core')
+                field: id
+
+      - name: issue_date
+        tests:
+          - not_null
+
+  - name: staging_credit_history
+    description: Credit score information and derived FICO metrics.
+
+    columns:
+      - name: id
+        description: Loan identifier.
+
+      - name: fico_range_low
+        description: Lower bound of FICO score range at origination.
+
+      - name: fico_range_high
+        description: Upper bound of FICO score range at origination.
+
+      - name: fico_score
+        description: Average FICO score calculated from origination range.
+
+      - name: last_fico_range_low
+        description: Lower bound of most recent FICO score range.
+
+      - name: last_fico_range_high
+        description: Upper bound of most recent FICO score range.
+
+      - name: last_fico_score
+        description: Average most recent FICO score.
+
+      - name: id
+        tests:
+          - relationships:
+              arguments:
+                to: ref('staging_loan_core')
+                field: id
+
+      - name: fico_score
+        tests:
+          - not_null
+
+      - name: last_fico_score
+        tests:
+          - not_null
+
+      - name: fico_score
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 300
+                max_value: 850
+
+  - name: staging_delinquency
+    description: Delinquency, inquiries and derogatory credit event metrics.
+
+    columns:
+      - name: id
+        description: Loan identifier.
+
+      - name: delinq_2yrs
+        description: Number of delinquency incidents in the previous two years.
+
+      - name: mths_since_last_delinq
+        description: Months since last delinquency.
+
+      - name: mths_since_last_record
+        description: Months since last public record.
+
+      - name: mths_since_last_major_derog
+        description: Months since most recent major derogatory event.
+
+      - name: acc_now_delinq
+        description: Number of currently delinquent accounts.
+
+      - name: delinq_amnt
+        description: Current delinquent balance.
+
+      - name: inq_last_6mths
+        description: Credit inquiries during previous six months.
+
+      - name: inq_fi
+        description: Personal finance inquiries.
+
+      - name: inq_last_12m
+        description: Credit inquiries during previous twelve months.
+
+      - name: id
+        tests:
+          - relationships:
+              arguments:
+                to: ref('staging_loan_core')
+                field: id
+
+  - name: staging_accounts
+    description: Trade line counts, account counts and account activity metrics.
+
+    columns:
+      - name: id
+        description: Loan identifier.
+
+      - name: open_acc
+        description: Number of open credit lines.
+
+      - name: pub_rec
+        description: Number of derogatory public records.
+
+      - name: total_acc
+        description: Total number of credit lines.
+
+      - name: mort_acc
+        description: Number of mortgage accounts.
+
+      - name: num_accts_ever_120_pd
+        description: Number of accounts ever 120+ days past due.
+
+      - name: num_actv_bc_tl
+        description: Number of active bankcard trade lines.
+
+      - name: num_actv_rev_tl
+        description: Number of active revolving trade lines.
+
+      - name: num_bc_sats
+        description: Number of satisfactory bankcard accounts.
+
+      - name: num_bc_tl
+        description: Number of bankcard accounts.
+
+      - name: num_il_tl
+        description: Number of installment accounts.
+
+      - name: num_op_rev_tl
+        description: Number of open revolving accounts.
+
+      - name: num_rev_accts
+        description: Number of revolving accounts.
+
+      - name: num_rev_tl_bal_gt_0
+        description: Number of revolving accounts with balance greater than zero.
+
+      - name: num_sats
+        description: Number of satisfactory accounts.
+
+      - name: num_tl_120dpd_2m
+        description: Accounts currently 120+ days past due.
+
+      - name: num_tl_30dpd
+        description: Accounts currently 30+ days past due.
+
+      - name: num_tl_90g_dpd_24m
+        description: Accounts 90+ days past due during last 24 months.
+
+      - name: num_tl_op_past_12m
+        description: Accounts opened during last 12 months.
+
+      - name: id
+        tests:
+          - relationships:
+              arguments:
+                to: ref('staging_loan_core')
+                field: id
+
+  - name: staging_balances
+    description: Credit balances, utilization and exposure metrics.
+
+    columns:
+      - name: id
+        description: Loan identifier.
+
+      - name: revol_bal
+        description: Total revolving balance.
+
+      - name: revol_util_pct
+        description: Revolving utilization percentage.
+
+      - name: total_rev_hi_lim
+        description: Total revolving credit limit.
+
+      - name: tot_coll_amt
+        description: Total collection amount owed.
+
+      - name: tot_cur_bal
+        description: Total current account balance.
+
+      - name: avg_cur_bal
+        description: Average current account balance.
+
+      - name: tot_hi_cred_lim
+        description: Total credit limit.
+
+      - name: total_bal_ex_mort
+        description: Total balance excluding mortgage debt.
+
+      - name: total_bc_limit
+        description: Total bankcard limit.
+
+      - name: total_il_high_credit_limit
+        description: Total installment loan credit limit.
+
+      - name: bc_open_to_buy
+        description: Available bankcard credit.
+
+      - name: bc_util
+        description: Bankcard utilization ratio.
+
+      - name: max_bal_bc
+        description: Maximum bankcard balance.
+
+      - name: all_util
+        description: Utilization across all credit products.
+
+      - name: id
+        tests:
+          - relationships:
+              arguments:
+                to: ref('staging_loan_core')
+                field: id
+
+  - name: staging_payments
+    description: Loan repayment, recovery and outstanding balance metrics.
+
+    columns:
+      - name: id
+        description: Loan identifier.
+
+      - name: out_prncp
+        description: Outstanding principal balance.
+
+      - name: out_prncp_inv
+        description: Outstanding investor principal balance.
+
+      - name: total_pymnt
+        description: Total payments received.
+
+      - name: total_pymnt_inv
+        description: Investor payments received.
+
+      - name: total_rec_prncp
+        description: Principal received.
+
+      - name: total_rec_int
+        description: Interest received.
+
+      - name: total_rec_late_fee
+        description: Late fees received.
+
+      - name: recoveries
+        description: Post charge-off recoveries.
+
+      - name: collection_recovery_fee
+        description: Recovery collection fees.
+
+      - name: last_pymnt_amnt
+        description: Most recent payment amount.
+
+      - name: id
+        tests:
+          - relationships:
+              arguments:
+                to: ref('staging_loan_core')
+                field: id
+
+      - name: total_pymnt
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+
+      - name: total_rec_prncp
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+
+      - name: total_rec_int
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+
+  - name: staging_secondary_applicant
+    description: Secondary applicant and joint application credit attributes.
+
+    columns:
+      - name: id
+        description: Loan identifier.
+
+      - name: revol_bal_joint
+        description: Joint revolving balance.
+
+      - name: sec_app_fico_range_low
+        description: Secondary applicant FICO lower range.
+
+      - name: sec_app_fico_range_high
+        description: Secondary applicant FICO upper range.
+
+      - name: sec_app_fico_score
+        description: Average secondary applicant FICO score.
+
+      - name: sec_app_inq_last_6mths
+        description: Secondary applicant inquiries during previous six months.
+
+      - name: sec_app_mort_acc
+        description: Secondary applicant mortgage accounts.
+
+      - name: sec_app_open_acc
+        description: Secondary applicant open accounts.
+
+      - name: sec_app_revol_util
+        description: Secondary applicant revolving utilization.
+
+      - name: sec_app_open_act_il
+        description: Secondary applicant active installment accounts.
+
+      - name: sec_app_num_rev_accts
+        description: Secondary applicant revolving accounts.
+
+      - name: sec_app_chargeoff_within_12_mths
+        description: Secondary applicant charge-offs during previous twelve months.
+
+      - name: sec_app_collections_12_mths_ex_med
+        description: Secondary applicant collections excluding medical collections.
+
+      - name: id
+        tests:
+          - relationships:
+              arguments:
+                to: ref('staging_loan_core')
+                field: id
+
+  - name: staging_hardship
+    description: Hardship program and debt settlement attributes.
+
+    columns:
+      - name: id
+        description: Loan identifier.
+
+      - name: hardship_flag
+        description: Indicates whether borrower is on hardship plan.
+
+      - name: hardship_type
+        description: Hardship plan type.
+
+      - name: hardship_reason
+        description: Reason hardship plan was offered.
+
+      - name: hardship_status
+        description: Current hardship plan status.
+
+      - name: deferral_term
+        description: Hardship deferral period in months.
+
+      - name: hardship_amount
+        description: Monthly hardship payment amount.
+
+      - name: hardship_length
+        description: Number of hardship months.
+
+      - name: hardship_dpd
+        description: Days past due at hardship plan start.
+
+      - name: hardship_loan_status
+        description: Loan status at hardship plan start.
+
+      - name: orig_projected_additional_accrued_interest
+        description: Projected accrued interest during hardship period.
+
+      - name: hardship_payoff_balance_amount
+        description: Payoff balance at hardship start.
+
+      - name: hardship_last_payment_amount
+        description: Last payment amount at hardship start.
+
+      - name: debt_settlement_flag
+        description: Indicates whether borrower is working with a debt settlement company.
+
+      - name: id
+        tests:
+          - relationships:
+              arguments:
+                to: ref('staging_loan_core')
+                field: id
