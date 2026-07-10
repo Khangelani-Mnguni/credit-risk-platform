@@ -52,7 +52,7 @@ try:
 
 except Exception as e:
 
-    st.error("❌ Failed to load model artifacts.")
+    st.error("Failed to load model artifacts.")
 
     st.exception(e)
 
@@ -78,7 +78,7 @@ render_sidebar(artifacts.metadata)
 # HEADER
 # =============================================================================
 
-st.title("🏦 Credit Risk Scorecard")
+st.title("Credit Risk Scorecard Evaluation")
 
 st.markdown(
     """
@@ -145,8 +145,6 @@ if applicant is not None:
 
         with st.spinner("Scoring applicant..."):
             result = predictor.predict(applicant)
-            
-            # ---> ADD THIS LINE <---
             # Save the result to session state so the Chatbot page can read it!
             st.session_state.current_prediction = result
 

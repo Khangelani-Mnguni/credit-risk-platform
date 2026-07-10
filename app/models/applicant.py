@@ -25,15 +25,25 @@ class Applicant(BaseModel):
 
     model_config = ConfigDict(
         validate_assignment=True,
-        extra="ignore",
+        extra="allow",  # CRITICAL: Allows pipeline defaults and new UI fields to pass through safely!
         frozen=False,
     )
 
-    # ------------------------------------------------------------------
-    # Categorical Features
-    # ------------------------------------------------------------------
+    id: int
 
-    term: Literal[" 36 months", " 60 months"]
+    # ------------------------------------------------------------------
+    # High-Impact Predictive Features (Captured from UI)
+    # ------------------------------------------------------------------
+    
+    fico_score: float = Field(..., ge=300, le=850)
+    
+    annual_inc: float = Field(..., ge=0)
+    
+    installment: float = Field(..., ge=0)
+    
+    tot_cur_bal: float = Field(..., ge=0)
+    
+    total_bc_limit: float = Field(..., ge=0)
 
     home_ownership: Literal[
         "MORTGAGE",
@@ -42,31 +52,39 @@ class Applicant(BaseModel):
         "ANY",
     ]
 
+    dti: float = Field(..., ge=0, le=100)
+    
+    all_util: float = Field(..., ge=0, le=200)
+    
+    bc_util: float = Field(..., ge=0, le=200)
+
+    inq_last_6mths: int = Field(..., ge=0)
+    
+    inq_last_12m: int = Field(..., ge=0)
+
+    # ------------------------------------------------------------------
+    # Derived Ratios (Calculated in the UI form)
+    # ------------------------------------------------------------------
+    
+    installment_income_ratio: float = Field(..., ge=0)
+
+    # ------------------------------------------------------------------
+    # Dummy / Legacy Fields (To satisfy pipeline shape requirements)
+    # ------------------------------------------------------------------
+
+    term: str
+
     purpose: str
 
-    grade: Literal[
-        "A", "B", "C", "D", "E", "F", "G"
-    ]
+    grade: str
 
     sub_grade: str
-
-    # ------------------------------------------------------------------
-    # Numerical Features
-    # ------------------------------------------------------------------
-
-    annual_inc: float = Field(..., ge=0)
-
-    dti: float = Field(..., ge=0, le=100)
 
     emp_length_years: int = Field(..., ge=0, le=50)
 
     revol_util: float = Field(..., ge=0, le=200)
 
-    tot_cur_bal: float = Field(..., ge=0)
-
     credit_history_months: int = Field(..., ge=0)
-
-    inq_last_6mths: int = Field(..., ge=0)
 
     # ------------------------------------------------------------------
     # Helpers

@@ -11,7 +11,7 @@ def render_sidebar(metadata):
 
     with st.sidebar:
 
-        st.title("🏦 Credit Risk")
+        st.title("💸 Credit Risk")
 
         st.markdown("---")
 
