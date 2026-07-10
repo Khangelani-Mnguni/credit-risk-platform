@@ -41,7 +41,7 @@ Feature Selection -\> Model Development -\> Benchmarking -\> Scorecard
 
 ``` bash
 pip install -r requirements.txt
-streamlit run app.py
+streamlit run app/main.py
 ```
 
 ## Future Work
