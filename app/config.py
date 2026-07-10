@@ -9,8 +9,7 @@ This module contains:
 - Model settings
 - Risk thresholds
 - Default applicant values
-
-Author: Your Name
+- Validation limits
 """
 
 from pathlib import Path
@@ -47,8 +46,8 @@ SCORECARD_PATH = OUTPUTS_DIR / "final_scorecard.xlsx"
 # STREAMLIT SETTINGS
 # =============================================================================
 
-APP_NAME = "Credit Risk Scorecard"
-APP_ICON = "🏦"
+APP_NAME = "Credit Risk Scorecard Evaluation"
+APP_ICON = "💸"
 LAYOUT = "wide"
 
 # =============================================================================
@@ -71,6 +70,9 @@ POOR_SCORE = 600
 
 # =============================================================================
 # DEFAULT APPLICANT VALUES (ALL 50 TRAINING FEATURES)
+# -----------------------------------------------------------------------------
+# Used as a fallback patch by the PredictionService to ensure the 
+# Scikit-Learn pipeline doesn't crash on missing UI fields.
 # =============================================================================
 
 DEFAULT_VALUES = {
@@ -78,13 +80,13 @@ DEFAULT_VALUES = {
     "id": "99999999",
     "issue_date": "2015-01-01",
     "earliest_credit_line_date": "2000-01-01",
-    "term": " 36 months",  # Usually in the data but not in your schema list; keeping safe
+    "term": " 36 months",
 
     # --- Core Loan Details ---
     "loan_amnt": 15000.0,
     "funded_amnt": 15000.0,
     "funded_amnt_inv": 15000.0,
-    "int_rate_pct": "10.5",  # Object type in your schema
+    "int_rate_pct": "10.5",
     "installment": 450.0,
     "grade": "C",
     "sub_grade": "C1",
@@ -121,7 +123,7 @@ DEFAULT_VALUES = {
     "total_bc_limit": 10000.0,
 
     # --- Utilization Metrics ---
-    "revol_util_pct": "50.0",  # Object type in your schema
+    "revol_util_pct": "50.0",
     "bc_util": 50.0,
     "all_util": 50.0,
     "revolving_balance_ratio": 0.50,
@@ -141,40 +143,18 @@ DEFAULT_VALUES = {
     "employment_stability_flag": 1,
     "high_dti_flag": 0,
     "subprime_flag": 0,
-    "default_flag": 0,  # Target variable (just in case the pipeline strictly validates X shape)
+    "default_flag": 0, 
 }
 
 # =============================================================================
 # UI OPTIONS
 # =============================================================================
 
-TERM_OPTIONS = [
-    " 36 months",
-    " 60 months",
-]
-
 HOME_OWNERSHIP_OPTIONS = [
     "MORTGAGE",
     "RENT",
     "OWN",
     "ANY",
-]
-
-PURPOSE_OPTIONS = [
-    "debt_consolidation",
-    "credit_card",
-    "home_improvement",
-    "major_purchase",
-    "small_business",
-    "other",
-]
-
-GRADE_OPTIONS = list("ABCDEFG")
-
-SUBGRADE_OPTIONS = [
-    f"{grade}{number}"
-    for grade in "ABCDEFG"
-    for number in range(1, 6)
 ]
 
 # =============================================================================
@@ -201,11 +181,19 @@ LOG_LEVEL = "INFO"
 # =============================================================================
 
 VALIDATION_LIMITS = {
-    "annual_inc": (0, 10_000_000),
+    # Financials
+    "annual_inc": (0.0, 10_000_000.0),
+    "installment": (0.0, 100_000.0),
+    "tot_cur_bal": (0.0, 100_000_000.0),
+    "total_bc_limit": (0.0, 10_000_000.0),
+    
+    # Ratios & Utilizations
     "dti": (0.0, 100.0),
-    "emp_length_years": (0, 50),
-    "revol_util": (0.0, 200.0),
-    "tot_cur_bal": (0, 100_000_000),
-    "credit_history_months": (0, 800),
+    "all_util": (0.0, 200.0),
+    "bc_util": (0.0, 200.0),
+    
+    # Bureau History
+    "fico_score": (300.0, 850.0),
     "inq_last_6mths": (0, 50),
+    "inq_last_12m": (0, 50),
 }

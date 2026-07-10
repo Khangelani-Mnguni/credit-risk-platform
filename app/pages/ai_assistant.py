@@ -18,9 +18,9 @@ if str(project_root) not in sys.path:
 from chatbot.rag import CreditRiskAgent
 from langchain_core.messages import HumanMessage, AIMessage
 
-st.set_page_config(page_title="AI Assistant", page_icon="💬", layout="wide")
+st.set_page_config(page_title="Khangs - Risk Analyst", page_icon="🇿🇦🐢", layout="wide")
 
-st.title("💬 AI Model Assistant & Policy Guide")
+st.title("🇿🇦🐢 AI Model Assistant & Policy Guide")
 st.markdown("Ask questions about South African credit policies, scorecard methodology, or the active applicant.")
 st.divider()
 

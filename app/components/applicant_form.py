@@ -9,16 +9,9 @@ from __future__ import annotations
 import streamlit as st
 from pydantic import ValidationError
 
-# Removed "app." prefix
-from config import (
-    TERM_OPTIONS,
-    HOME_OWNERSHIP_OPTIONS,
-    PURPOSE_OPTIONS,
-    GRADE_OPTIONS,
-    SUBGRADE_OPTIONS,
-)
+# Removed unused imports (TERM_OPTIONS, PURPOSE_OPTIONS, etc.)
+from config import HOME_OWNERSHIP_OPTIONS
 
-# Removed "app." prefix
 from models.applicant import Applicant
 
 
@@ -43,34 +36,17 @@ def render_applicant_form() -> Applicant | None:
         col1, col2 = st.columns(2)
 
         # ==============================================================
-        # LEFT COLUMN
+        # LEFT COLUMN (Financial Profile)
         # ==============================================================
 
         with col1:
 
-            term = st.selectbox(
-                "Loan Term",
-                TERM_OPTIONS,
-            )
-
-            home_ownership = st.selectbox(
-                "Home Ownership",
-                HOME_OWNERSHIP_OPTIONS,
-            )
-
-            purpose = st.selectbox(
-                "Loan Purpose",
-                PURPOSE_OPTIONS,
-            )
-
-            grade = st.selectbox(
-                "Grade",
-                GRADE_OPTIONS,
-            )
-
-            sub_grade = st.selectbox(
-                "Sub Grade",
-                SUBGRADE_OPTIONS,
+            fico_score = st.number_input(
+                "FICO Score",
+                min_value=300.0,
+                max_value=850.0,
+                value=720.0,
+                step=1.0,
             )
 
             annual_inc = st.number_input(
@@ -81,8 +57,37 @@ def render_applicant_form() -> Applicant | None:
                 format="%.2f",
             )
 
+            installment = st.number_input(
+                "Proposed Monthly Installment ($)",
+                min_value=0.0,
+                value=450.0,
+                step=10.0,
+                format="%.2f",
+            )
+
+            tot_cur_bal = st.number_input(
+                "Total Current Balance ($)",
+                min_value=0.0,
+                value=100000.0,
+                step=1000.0,
+                format="%.2f",
+            )
+
+            total_bc_limit = st.number_input(
+                "Total Bankcard Limit ($)",
+                min_value=0.0,
+                value=25000.0,
+                step=1000.0,
+                format="%.2f",
+            )
+
+            home_ownership = st.selectbox(
+                "Home Ownership",
+                HOME_OWNERSHIP_OPTIONS,
+            )
+
         # ==============================================================
-        # RIGHT COLUMN
+        # RIGHT COLUMN (Credit Utilization & Behavior)
         # ==============================================================
 
         with col2:
@@ -94,33 +99,18 @@ def render_applicant_form() -> Applicant | None:
                 value=20.0,
             )
 
-            emp_length_years = st.slider(
-                "Employment Length (Years)",
-                min_value=0,
-                max_value=50,
-                value=5,
-            )
-
-            revol_util = st.slider(
-                "Revolving Utilization (%)",
+            all_util = st.slider(
+                "Total Credit Utilization (%)",
                 min_value=0.0,
                 max_value=200.0,
-                value=50.0,
+                value=35.0,
             )
 
-            tot_cur_bal = st.number_input(
-                "Total Current Balance ($)",
+            bc_util = st.slider(
+                "Bankcard Utilization (%)",
                 min_value=0.0,
-                value=100000.0,
-                step=1000.0,
-                format="%.2f",
-            )
-
-            credit_history_months = st.slider(
-                "Credit History (Months)",
-                min_value=0,
-                max_value=600,
-                value=120,
+                max_value=200.0,
+                value=40.0,
             )
 
             inq_last_6mths = st.number_input(
@@ -130,8 +120,15 @@ def render_applicant_form() -> Applicant | None:
                 value=0,
             )
 
+            inq_last_12m = st.number_input(
+                "Credit Inquiries (Last 12 Months)",
+                min_value=0,
+                max_value=50,
+                value=1,
+            )
+
         submitted = st.form_submit_button(
-            "🔍 Calculate Credit Score",
+            "Calculate Credit Score",
             use_container_width=True,
         )
 
@@ -139,26 +136,48 @@ def render_applicant_form() -> Applicant | None:
         return None
 
     try:
+        # Calculate the derived ratio that the ML pipeline expects
+        # Formula: Installment / Annual Income
+        calc_inst_inc_ratio = installment / annual_inc if annual_inc > 0 else 0.0
 
         return Applicant(
-            id=99999999,  # Perfect placement!
-            term=term,
-            home_ownership=home_ownership,
-            purpose=purpose,
-            grade=grade,
-            sub_grade=sub_grade,
+            id=99999999,
+            
+            # ---------------------------------------------------------
+            # HIGH-IMPACT PREDICTIVE FIELDS (Captured from UI)
+            # ---------------------------------------------------------
+            fico_score=fico_score,
             annual_inc=annual_inc,
-            dti=dti,
-            emp_length_years=emp_length_years,
-            revol_util=revol_util,
+            installment=installment,
             tot_cur_bal=tot_cur_bal,
-            credit_history_months=credit_history_months,
+            total_bc_limit=total_bc_limit,
+            home_ownership=home_ownership,
+            dti=dti,
+            all_util=all_util,
+            bc_util=bc_util,
             inq_last_6mths=inq_last_6mths,
+            inq_last_12m=inq_last_12m,
+            
+            # ---------------------------------------------------------
+            # DERIVED RATIO
+            # ---------------------------------------------------------
+            installment_income_ratio=calc_inst_inc_ratio,
+            
+            # ---------------------------------------------------------
+            # HIDDEN / DUMMY FIELDS (To satisfy Pydantic & Pipeline)
+            # ---------------------------------------------------------
+            term=" 36 months",
+            purpose="debt_consolidation",
+            grade="C",
+            sub_grade="C1",
+            emp_length_years=5,
+            revol_util=50.0,
+            credit_history_months=120,
         )
 
     except ValidationError as e:
 
-        st.error("Input validation failed.")
+        st.error("Input validation failed. Please check the values entered.")
 
         st.exception(e)
 
