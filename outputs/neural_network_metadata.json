@@ -1,0 +1,12 @@
+{
+    "model_name": "Neural Network (MLP)",
+    "model_version": "1.0.0",
+    "training_timestamp": "2026-07-04T21:56:42.222807+00:00",
+    "training_samples": 2047844,
+    "training_features": 12,
+    "target_name": "default_flag",
+    "random_state": 42,
+    "training_time_seconds": 225.51796293258667,
+    "python_version": "3.10.9",
+    "sklearn_version": "1.7.2"
+}

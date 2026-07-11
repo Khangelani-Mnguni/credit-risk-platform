@@ -1,0 +1,12 @@
+{
+    "model_name": "Random Forest",
+    "model_version": "1.0.0",
+    "training_timestamp": "2026-07-04T21:23:07.372548",
+    "training_samples": 2047844,
+    "training_features": 12,
+    "target_name": "default_flag",
+    "random_state": 42,
+    "training_time_seconds": 792.3132169246674,
+    "python_version": "3.10.9",
+    "sklearn_version": "1.7.2"
+}
