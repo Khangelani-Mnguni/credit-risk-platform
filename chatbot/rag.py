@@ -19,7 +19,7 @@ class CreditRiskAgent:
         # Initialize the 100% local, free LLM via Ollama
         # We use llama3.2 because it natively supports agent tool-calling
         self.llm = ChatGroq(
-            model="llama3-8b-8192",
+            model="llama-3.1-8b-instant",
             temperature=0.0,
             api_key=os.environ.get("GROQ_API_KEY")
         )
