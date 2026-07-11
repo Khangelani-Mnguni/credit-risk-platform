@@ -5,7 +5,9 @@ Initializes the AI Agent execution environment using modern LangGraph architectu
 and a 100% local Ollama LLM.
 """
 
-from langchain_ollama import ChatOllama
+# from langchain_ollama import ChatOllama
+from langchain_groq import ChatGroq
+import os
 from langgraph.prebuilt import create_react_agent
 from langchain_core.messages import HumanMessage
 
@@ -16,9 +18,10 @@ class CreditRiskAgent:
     def __init__(self):
         # Initialize the 100% local, free LLM via Ollama
         # We use llama3.2 because it natively supports agent tool-calling
-        self.llm = ChatOllama(
-            model="llama3",
-            temperature=0.0
+        self.llm = ChatGroq(
+            model="llama3-8b-8192",
+            temperature=0.0,
+            api_key=os.environ.get("GROQ_API_KEY")
         )
         
         # Bind the tools (Live Data + FAISS Retriever)
