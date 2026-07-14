@@ -86,6 +86,10 @@ class CreditRiskAgent:
         )
 
         logger.info("CreditRiskAgent initialized successfully.")
+        
+        print("=" * 60)
+        print("NEW RAG.PY LOADED")
+        print("=" * 60)
 
     # -------------------------------------------------------------------------
 
@@ -114,6 +118,7 @@ class CreditRiskAgent:
         logger.info("User question: %s", user_input)
 
         try:
+            print("Using recursion limit =", self.DEFAULT_RECURSION_LIMIT)
 
             response = self.agent_executor.invoke(
                 {"messages": messages},
