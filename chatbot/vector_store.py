@@ -25,18 +25,17 @@ DB_DIR = CURRENT_DIR / "vector_db"
 
 def get_api_embeddings():
     """Initializes the lightweight Hugging Face API Embeddings."""
-    
-    # 1. Try to get the token from the environment (.env)
+    # Try to get the token from the environment (.env)
     hf_token = os.environ.get("HF_TOKEN")
     
-    # 2. If not found, safely try Streamlit secrets (handles terminal execution)
+    # If not found, safely try Streamlit secrets (handles terminal execution)
     if not hf_token:
         try:
             hf_token = st.secrets.get("HF_TOKEN")
         except Exception:
-            pass # Fails gracefully if run via terminal instead of 'streamlit run'
+            pass 
 
-    # 3. Raise a clear error if the token is completely missing
+    # Raise a clear error if the token is completely missing
     if not hf_token:
         raise ValueError("HF_TOKEN is missing. Please add it to your Streamlit secrets or .env file.")
         
@@ -76,6 +75,13 @@ def build_vector_store():
 @st.cache_resource(show_spinner=False)
 def load_cached_vector_db():
     """Loads the FAISS database utilizing cloud API embeddings."""
+    
+    # --- CRITICAL FIX: AUTO-BUILD IF MISSING ON CLOUD ---
+    if not DB_DIR.exists():
+        print("Vector Database not found on server. Auto-building now...")
+        build_vector_store()
+        
+    # If it STILL doesn't exist (e.g., no documents in the folder)
     if not DB_DIR.exists():
         return None
         
