@@ -1,5 +1,5 @@
 """
-pages/ai_assistant.py
+pages/2_ai_assistant.py
 
 Dedicated page for the LangChain Credit Risk AI Agent.
 """
@@ -24,9 +24,19 @@ st.title("🇿🇦🐢 AI Model Assistant & Policy Guide")
 st.markdown("Ask questions about South African credit policies, scorecard methodology, or the active applicant.")
 st.divider()
 
-# Initialize Agent in session state
-if "agent" not in st.session_state:
-    st.session_state.agent = CreditRiskAgent()
+# =============================================================================
+# --- CRITICAL FIX: CACHE THE HEAVY AI AGENT GLOBALLY ---
+# By using @st.cache_resource, the PyTorch embedding model is loaded into 
+# memory exactly ONCE for the entire server, rather than once per user session.
+# =============================================================================
+@st.cache_resource(show_spinner="Booting AI Agent & Loading Vector Database...")
+def get_ai_agent():
+    return CreditRiskAgent()
+
+# Initialize the global agent
+agent = get_ai_agent()
+
+# Initialize chat history in session state (this is safe because text is tiny!)
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "langchain_history" not in st.session_state:
@@ -50,8 +60,8 @@ if prompt := st.chat_input("e.g., What is our maximum DTI policy for a medium ri
             # Fetch the live prediction result from session state (if an applicant was scored)
             live_result = st.session_state.get("current_prediction", None)
             
-            # Pass query and history to the LangChain Agent
-            answer = st.session_state.agent.ask(
+            # Pass query and history to the globally cached LangChain Agent
+            answer = agent.ask(
                 user_input=prompt,
                 chat_history=st.session_state.langchain_history,
                 current_prediction=live_result

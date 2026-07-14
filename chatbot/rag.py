@@ -2,12 +2,11 @@
 chatbot/rag.py
 
 Initializes the AI Agent execution environment using modern LangGraph architecture
-and a 100% local Ollama LLM.
+and the ultra-fast Groq API.
 """
 
-# from langchain_ollama import ChatOllama
-from langchain_groq import ChatGroq
 import os
+from langchain_groq import ChatGroq
 from langgraph.prebuilt import create_react_agent
 from langchain_core.messages import HumanMessage
 
@@ -16,8 +15,8 @@ from chatbot.tools import get_current_applicant_data, search_model_documentation
 
 class CreditRiskAgent:
     def __init__(self):
-        # Initialize the 100% local, free LLM via Ollama
-        # We use llama3.2 because it natively supports agent tool-calling
+        # Initialize the ultra-fast cloud LLM via Groq
+        # Llama-3.1 natively supports precise agent tool-calling
         self.llm = ChatGroq(
             model="llama-3.1-8b-instant",
             temperature=0.0,
@@ -48,5 +47,5 @@ class CreditRiskAgent:
         # Invoke the LangGraph agent
         response = self.agent_executor.invoke({"messages": messages})
         
-        # LangGraph returns the full conversational state; we just grab the final message!
+        # LangGraph returns the full conversational state; we grab the final message
         return response["messages"][-1].content
