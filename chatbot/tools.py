@@ -33,9 +33,11 @@ def get_current_applicant_data(query: str) -> str:
 def search_model_documentation(query: str) -> str:
     """Use this tool to search the model documentation, methodology, or credit policies."""
     if not (retriever := get_retriever()):
-        return "No documentation is currently loaded in the database."
+        # CRITICAL FIX: Explicitly order the LLM to stop looping.
+        return "SYSTEM ERROR: The policy documentation database is empty or offline. DO NOT try calling this tool again. Please inform the user that the policy database is currently unavailable."
 
     if not (docs := retriever.invoke(query)):
-        return "No relevant documentation found."
+        # CRITICAL FIX: Prevent the LLM from aggressively guessing search terms.
+        return "No relevant documentation found for that query. Please try ONE different search term, or inform the user you don't know the answer."
 
     return "\n\n".join(doc.page_content for doc in docs)
