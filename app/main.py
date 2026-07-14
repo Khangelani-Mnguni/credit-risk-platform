@@ -197,6 +197,7 @@ st.sidebar.markdown("""
 This platform allows you to evaluate multiple loan applicants at once using the Logistic Scorecard Model.
 
 1. **Upload a File**:
+   - Upload a CSV, TXT (comma or semicolon separated), or Excel file containing applicant data.
    - Upload a CSV, TXT (comma-separated), or Excel file containing applicant data.
    - If you don't upload a file, the app will auto-load your local test dataset.
 
@@ -224,6 +225,9 @@ raw_data = None
 
 if uploaded_file is not None:
     try:
+        # Treat both CSV and TXT files with python engine to detect delimiters and skip bad lines
+        if uploaded_file.name.endswith('.csv') or uploaded_file.name.endswith('.txt'):
+            raw_data = pd.read_csv(uploaded_file, sep=None, engine='python', on_bad_lines='skip')
         # Treat both CSV and TXT files as comma-separated values
         if uploaded_file.name.endswith('.csv') or uploaded_file.name.endswith('.txt'):
             raw_data = pd.read_csv(uploaded_file)
@@ -246,6 +250,10 @@ if raw_data is None or len(raw_data) == 0:
     try:
         # Only read the file if it actually exists AND has more than 0 bytes
         if os.path.exists(file_in_root) and os.path.getsize(file_in_root) > 0:
+            raw_data = pd.read_csv(file_in_root, sep=None, engine='python', on_bad_lines='skip')
+            st.info(f"No file uploaded. Automatically loaded local test data ({len(raw_data):,} applicants).")
+        elif os.path.exists(file_in_app) and os.path.getsize(file_in_app) > 0:
+            raw_data = pd.read_csv(file_in_app, sep=None, engine='python', on_bad_lines='skip')
             raw_data = pd.read_csv(file_in_root)
             st.info(f"No file uploaded. Automatically loaded local test data ({len(raw_data):,} applicants).")
         elif os.path.exists(file_in_app) and os.path.getsize(file_in_app) > 0:
