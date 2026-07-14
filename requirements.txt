@@ -1,5 +1,3 @@
---extra-index-url https://download.pytorch.org/whl/cpu
-
 # =============================================================================
 # Credit Risk Scorecard Platform
 # Production Deployment Requirements (Streamlit Cloud + Groq + HF API)
@@ -16,14 +14,12 @@ scipy>=1.11.0
 # -----------------------------------------------------------------------------
 # Machine Learning & Core Pipeline
 # -----------------------------------------------------------------------------
+# CRITICAL: Pinned to exact versions to prevent Unpickling/Segmentation Faults!
 scikit-learn==1.7.2
 xgboost==3.0.2
 joblib>=1.3.2
 cloudpickle>=3.0.0
-
-# --- CRITICAL FIX: FORCING CPU-ONLY PYTORCH ---
-torch>=2.2.0+cpu
-torchvision>=0.19.0+cpu
+# Removed: torch and torchvision (no longer needed for Cloud API)
 
 # -----------------------------------------------------------------------------
 # Streamlit Application Framework
