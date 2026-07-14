@@ -2,7 +2,7 @@
 main.py
 
 Batch-Processing Entry Point for the Credit Risk Scorecard Platform.
-Allows users to upload a CSV/Excel file of applicants and generate scorecard decisions.
+Allows users to upload a CSV/Excel/TXT file of applicants and generate scorecard decisions.
 """
 
 from __future__ import annotations
@@ -93,7 +93,7 @@ def process_batch(df: pd.DataFrame) -> pd.DataFrame:
         revol_util_val = safe_float(app_dict.get('revol_util', 50.0), 50.0)
         emp_length_val = safe_float(app_dict.get('emp_length_years', 5), 5)
             
-        # 3. Apply Boundary Clamps (so real-world outliers don't trip strict Pydantic rules)
+        # 3. Apply Boundary Clamps (using the safe float values!)
         app_dict['dti'] = min(max(dti_val, 0.0), 100.0)
         app_dict['all_util'] = min(max(all_util_val, 0.0), 200.0)
         app_dict['bc_util'] = min(max(bc_util_val, 0.0), 200.0)
@@ -162,7 +162,7 @@ def create_final_report(row: pd.Series) -> str:
     else:
         tier_color = "🔴"
         
-    return f"""
+    report = f"""
 ### {tier_color} Applicant ID: {row.get('id', 'N/A')}
 **Decision:** {row.get('Decision', 'N/A')}  |  **Probability of Default:** {row.get('Probability of Default', 'N/A')}  |  **Credit Score:** {row.get('Credit Score', 'N/A')}
 
@@ -173,6 +173,7 @@ def create_final_report(row: pd.Series) -> str:
 | **Proposed Installment** | ${safe_float(row.get('installment', 0), 0):,.2f} | **Total Credit Utilization** | {row.get('all_util', 0)}% |
 | **Debt-to-Income (DTI)** | {row.get('dti', 0)}% | **Inquiries (Last 12m)** | {row.get('inq_last_12m', 0)} |
     """
+    return report
 
 # Utility function for the report block below
 def safe_float(val, fallback):
@@ -187,7 +188,8 @@ def safe_float(val, fallback):
 
 st.sidebar.title("💳 Batch Credit Evaluation")
 
-uploaded_file = st.sidebar.file_uploader("Upload Applicants (CSV or Excel)", type=["csv", "xlsx"])
+# Updated file_uploader to accept txt files
+uploaded_file = st.sidebar.file_uploader("Upload Applicants (CSV, TXT, Excel)", type=["csv", "txt", "xlsx"])
 
 st.sidebar.markdown("""
 ### User Guide:
@@ -195,7 +197,7 @@ st.sidebar.markdown("""
 This platform allows you to evaluate multiple loan applicants at once using the Logistic Scorecard Model.
 
 1. **Upload a File**:
-   - Upload a CSV or Excel file containing applicant data.
+   - Upload a CSV, TXT (comma-separated), or Excel file containing applicant data.
    - If you don't upload a file, the app will auto-load your local test dataset.
 
 2. **View Batch Data**:
@@ -217,14 +219,23 @@ This platform allows you to evaluate multiple loan applicants at once using the 
 
 st.title("Predicting Credit Risk & Loan Approvals")
 
-# 1. Load Data
+# 1. Load Data Securely
+raw_data = None
+
 if uploaded_file is not None:
-    if uploaded_file.name.endswith('.csv'):
-        raw_data = pd.read_csv(uploaded_file)
-    else:
-        raw_data = pd.read_excel(uploaded_file)
-    st.success(f"Successfully loaded {len(raw_data):,} applicants from {uploaded_file.name}")
-else:
+    try:
+        # Treat both CSV and TXT files as comma-separated values
+        if uploaded_file.name.endswith('.csv') or uploaded_file.name.endswith('.txt'):
+            raw_data = pd.read_csv(uploaded_file)
+        else:
+            raw_data = pd.read_excel(uploaded_file)
+        st.success(f"Successfully loaded {len(raw_data):,} applicants from {uploaded_file.name}")
+    except pd.errors.EmptyDataError:
+        st.error("❌ The uploaded file is completely empty.")
+    except Exception as e:
+        st.error(f"❌ Failed to read uploaded file: {e}")
+
+if raw_data is None or len(raw_data) == 0:
     # Attempt to automatically find the 'test_applicants.csv' we generated earlier
     app_dir = os.path.dirname(__file__)
     project_root = os.path.dirname(app_dir)
@@ -232,20 +243,27 @@ else:
     file_in_root = os.path.join(project_root, "test_applicants.csv")
     file_in_app = os.path.join(app_dir, "test_applicants.csv")
     
-    if os.path.exists(file_in_root):
-        raw_data = pd.read_csv(file_in_root)
-        st.info(f"No file uploaded. Automatically loaded test data ({len(raw_data):,} applicants).")
-    elif os.path.exists(file_in_app):
-        raw_data = pd.read_csv(file_in_app)
-        st.info(f"No file uploaded. Automatically loaded test data ({len(raw_data):,} applicants).")
-    else:
-        st.warning("No file uploaded and 'test_applicants.csv' not found. Using fallback sample data.")
-        
-        raw_data = pd.DataFrame([
-            {**DEFAULT_VALUES, "id": 10001, "fico_score": 780, "annual_inc": 120000, "installment": 400, "dti": 12.5, "all_util": 15.0, "bc_util": 10.0, "total_bc_limit": 55000, "inq_last_12m": 0},
-            {**DEFAULT_VALUES, "id": 10002, "fico_score": 670, "annual_inc": 65000, "installment": 600, "dti": 25.0, "all_util": 45.0, "bc_util": 50.0, "total_bc_limit": 15000, "inq_last_12m": 2},
-            {**DEFAULT_VALUES, "id": 10003, "fico_score": 580, "annual_inc": 45000, "installment": 800, "dti": 40.0, "all_util": 85.0, "bc_util": 90.0, "total_bc_limit": 5000, "inq_last_12m": 6},
-        ])
+    try:
+        # Only read the file if it actually exists AND has more than 0 bytes
+        if os.path.exists(file_in_root) and os.path.getsize(file_in_root) > 0:
+            raw_data = pd.read_csv(file_in_root)
+            st.info(f"No file uploaded. Automatically loaded local test data ({len(raw_data):,} applicants).")
+        elif os.path.exists(file_in_app) and os.path.getsize(file_in_app) > 0:
+            raw_data = pd.read_csv(file_in_app)
+            st.info(f"No file uploaded. Automatically loaded local test data ({len(raw_data):,} applicants).")
+    except pd.errors.EmptyDataError:
+        st.warning("⚠️ The local 'test_applicants.csv' file is empty or corrupted.")
+    except Exception as e:
+        st.warning(f"⚠️ Could not load local test data: {e}")
+
+# Final Fallback - If all files are empty, bad, or missing, inject safe dummy data
+if raw_data is None or len(raw_data) == 0:
+    st.info("Using default fallback sample data to display application features.")
+    raw_data = pd.DataFrame([
+        {**DEFAULT_VALUES, "id": 10001, "fico_score": 780, "annual_inc": 120000, "installment": 400, "dti": 12.5, "all_util": 15.0, "bc_util": 10.0, "total_bc_limit": 55000, "inq_last_12m": 0},
+        {**DEFAULT_VALUES, "id": 10002, "fico_score": 670, "annual_inc": 65000, "installment": 600, "dti": 25.0, "all_util": 45.0, "bc_util": 50.0, "total_bc_limit": 15000, "inq_last_12m": 2},
+        {**DEFAULT_VALUES, "id": 10003, "fico_score": 580, "annual_inc": 45000, "installment": 800, "dti": 40.0, "all_util": 85.0, "bc_util": 90.0, "total_bc_limit": 5000, "inq_last_12m": 6},
+    ])
 
 # --- CRITICAL FIX: RANDOM SAMPLE TO AVOID MESSAGE SIZE ERROR ---
 if len(raw_data) > 100:
