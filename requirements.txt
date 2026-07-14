@@ -2,14 +2,13 @@
 
 # =============================================================================
 # Credit Risk Scorecard Platform
-# Production Deployment Requirements (Streamlit Cloud + Groq)
+# Production Deployment Requirements (Streamlit Cloud + Groq + HF API)
 # Recommended Platform Python Version: 3.11 or 3.12
 # =============================================================================
 
 # -----------------------------------------------------------------------------
 # Core Scientific Computing
 # -----------------------------------------------------------------------------
-# Relaxed exact locks to allow matching pre-compiled wheels in the cloud
 numpy>=1.26.4,<2.0.0
 pandas>=2.1.0
 scipy>=1.11.0
@@ -32,7 +31,7 @@ torchvision>=0.19.0+cpu
 streamlit==1.47.0
 
 # -----------------------------------------------------------------------------
-# AI Agent & Orchestration (Groq Migration for Cloud)
+# AI Agent & Orchestration
 # -----------------------------------------------------------------------------
 langchain==0.3.27
 langchain-core==0.3.72
@@ -46,10 +45,8 @@ langchain-groq==0.2.1
 # Vector Database & Embeddings
 # -----------------------------------------------------------------------------
 faiss-cpu==1.11.0.post1
-sentence-transformers>=3.0.0
-transformers>=4.40.0
-tokenizers>=0.19.0
 huggingface-hub>=0.23.0
+# Removed: transformers, sentence-transformers, and tokenizers 
 
 # -----------------------------------------------------------------------------
 # Risk Engineering & Statistical Formulations
