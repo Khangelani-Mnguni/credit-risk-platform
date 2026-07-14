@@ -1,7 +1,7 @@
 """
 chatbot/vector_store.py
 
-Handles document ingestion and vector database management.
+Handles document ingestion and vector database management using Free Cloud APIs.
 """
 
 import os
@@ -15,13 +15,36 @@ load_dotenv()
 from langchain_community.document_loaders import DirectoryLoader, PyPDFLoader, TextLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
-from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_huggingface import HuggingFaceEndpointEmbeddings
 
 # Define paths relative to the project root
 CURRENT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = CURRENT_DIR.parent
 DOCS_DIR = PROJECT_ROOT / "docs"
 DB_DIR = CURRENT_DIR / "vector_db"
+
+def get_api_embeddings():
+    """Initializes the lightweight Hugging Face API Embeddings."""
+    
+    # 1. Try to get the token from the environment (.env)
+    hf_token = os.environ.get("HF_TOKEN")
+    
+    # 2. If not found, safely try Streamlit secrets (handles terminal execution)
+    if not hf_token:
+        try:
+            hf_token = st.secrets.get("HF_TOKEN")
+        except Exception:
+            pass # Fails gracefully if run via terminal instead of 'streamlit run'
+
+    # 3. Raise a clear error if the token is completely missing
+    if not hf_token:
+        raise ValueError("HF_TOKEN is missing. Please add it to your Streamlit secrets or .env file.")
+        
+    return HuggingFaceEndpointEmbeddings(
+        model="sentence-transformers/all-MiniLM-L6-v2",
+        task="feature-extraction",
+        huggingfacehub_api_token=hf_token
+    )
 
 def build_vector_store():
     """Reads files from the docs/ folder and builds the FAISS index."""
@@ -30,7 +53,7 @@ def build_vector_store():
         print("Created docs/ directory. Please add some PDF or TXT files and run this again.")
         return None
 
-    # Load documents (supports TXT, MD, and PDF)
+    # Load documents
     text_loader = DirectoryLoader(str(DOCS_DIR), glob="**/*.txt", loader_cls=TextLoader)
     pdf_loader = DirectoryLoader(str(DOCS_DIR), glob="**/*.pdf", loader_cls=PyPDFLoader)
     
@@ -43,38 +66,24 @@ def build_vector_store():
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
     chunks = text_splitter.split_documents(docs)
 
-    # Create embeddings and save to FAISS
-    # Using explicit CPU assignment for consistency with the cloud loader
-    embeddings = HuggingFaceEmbeddings(
-        model_name="all-MiniLM-L6-v2",
-        model_kwargs={'device': 'cpu'},
-        encode_kwargs={'normalize_embeddings': False}
-    )
+    # Create embeddings via API and save to FAISS
+    embeddings = get_api_embeddings()
     vector_store = FAISS.from_documents(chunks, embeddings)
     vector_store.save_local(str(DB_DIR))
     print(f"Vector store built successfully with {len(chunks)} chunks.")
     return vector_store
 
-# --- CRITICAL MEMORY FIX ---
-# @st.cache_resource ensures the embedding model and database are only 
-# loaded into the server's RAM ONCE, drastically reducing memory usage!
 @st.cache_resource(show_spinner=False)
 def load_cached_vector_db():
-    """Loads the FAISS database and CPU-optimized embeddings into a global cache."""
+    """Loads the FAISS database utilizing cloud API embeddings."""
     if not DB_DIR.exists():
         return None
         
-    # 1. Force the smallest, most efficient embedding model
-    # 2. Force it to run on CPU to prevent CUDA memory bloat
-    embeddings = HuggingFaceEmbeddings(
-        model_name="all-MiniLM-L6-v2", 
-        model_kwargs={'device': 'cpu'}, 
-        encode_kwargs={'normalize_embeddings': False}
-    )
+    embeddings = get_api_embeddings()
     
     return FAISS.load_local(
-        str(DB_DIR),
-        embeddings,
+        str(DB_DIR), 
+        embeddings, 
         allow_dangerous_deserialization=True
     )
 
@@ -85,6 +94,5 @@ def get_retriever():
         return vector_store.as_retriever(search_kwargs={"k": 3})
     return None
 
-# Run this script directly to ingest new documents
 if __name__ == "__main__":
     build_vector_store()
