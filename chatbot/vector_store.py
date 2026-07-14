@@ -183,7 +183,8 @@ def build_vector_store() -> Optional[FAISS]:
 # Cached Loader
 # ==============================================================================
 
-@st.cache_resource(show_spinner="Loading policy knowledge base...")
+# --- CRITICAL FIX: Turn off the spinner to prevent ThreadPool UI crashes ---
+@st.cache_resource(show_spinner=False)
 def load_cached_vector_db() -> Optional[FAISS]:
     """
     Loads the cached FAISS database.
@@ -226,21 +227,18 @@ def load_cached_vector_db() -> Optional[FAISS]:
 def get_retriever():
     """
     Returns a tuned retriever.
-
-    The similarity score threshold greatly reduces irrelevant
-    context and prevents unnecessary repeated searches by the LLM.
     """
-
     vector_store = load_cached_vector_db()
 
     if vector_store is None:
         return None
 
+    # --- CRITICAL FIX 1: Use standard similarity search! ---
+    # FAISS distance scores do not reliably normalize for the threshold search.
     return vector_store.as_retriever(
-        search_type="similarity_score_threshold",
+        search_type="similarity",
         search_kwargs={
-            "k": 2,
-            "score_threshold": 0.45,
+            "k": 2
         },
     )
 
