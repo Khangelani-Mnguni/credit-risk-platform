@@ -72,18 +72,33 @@ def process_batch(df: pd.DataFrame) -> pd.DataFrame:
             if key not in app_dict or pd.isna(app_dict[key]):
                 app_dict[key] = default_val
 
+        # --- CRITICAL FIX: Safe float casting ---
+        # Ensures that if a CSV has a string like "50.0", it becomes a real number
+        def safe_float(val, fallback):
+            try:
+                return float(val)
+            except (ValueError, TypeError):
+                return fallback
+
         # 2. Dynamically calculate installment_income_ratio if missing
         if 'installment_income_ratio' not in app_dict or pd.isna(app_dict['installment_income_ratio']):
-            annual_inc = app_dict.get('annual_inc', 0)
-            installment = app_dict.get('installment', 0)
+            annual_inc = safe_float(app_dict.get('annual_inc', 0), 0)
+            installment = safe_float(app_dict.get('installment', 0), 0)
             app_dict['installment_income_ratio'] = (installment / annual_inc) if annual_inc > 0 else 0.0
             
+        # Extract numerical values safely
+        dti_val = safe_float(app_dict.get('dti', 20.0), 20.0)
+        all_util_val = safe_float(app_dict.get('all_util', 50.0), 50.0)
+        bc_util_val = safe_float(app_dict.get('bc_util', 50.0), 50.0)
+        revol_util_val = safe_float(app_dict.get('revol_util', 50.0), 50.0)
+        emp_length_val = safe_float(app_dict.get('emp_length_years', 5), 5)
+            
         # 3. Apply Boundary Clamps (so real-world outliers don't trip strict Pydantic rules)
-        app_dict['dti'] = min(max(app_dict.get('dti', 20.0), 0.0), 100.0)
-        app_dict['all_util'] = min(max(app_dict.get('all_util', 50.0), 0.0), 200.0)
-        app_dict['bc_util'] = min(max(app_dict.get('bc_util', 50.0), 0.0), 200.0)
-        app_dict['revol_util'] = min(max(app_dict.get('revol_util', 50.0), 0.0), 200.0)
-        app_dict['emp_length_years'] = min(max(app_dict.get('emp_length_years', 5), 0), 50)
+        app_dict['dti'] = min(max(dti_val, 0.0), 100.0)
+        app_dict['all_util'] = min(max(all_util_val, 0.0), 200.0)
+        app_dict['bc_util'] = min(max(bc_util_val, 0.0), 200.0)
+        app_dict['revol_util'] = min(max(revol_util_val, 0.0), 200.0)
+        app_dict['emp_length_years'] = int(min(max(emp_length_val, 0), 50))
         
         # 4. Final NaN sweep (Pydantic crashes if it encounters a NaN float for a required field)
         for k, v in app_dict.items():
@@ -153,11 +168,18 @@ def create_final_report(row: pd.Series) -> str:
 
 | **Financial Profile** | **Details** | **Credit Behavior** | **Details** |
 |-----------------------|-------------|---------------------|-------------|
-| **FICO Score** | {row.get('fico_score', 'N/A')} | **Total Bankcard Limit** | ${row.get('total_bc_limit', 0):,.2f} |
-| **Annual Income** | ${row.get('annual_inc', 0):,.2f} | **Bankcard Utilization** | {row.get('bc_util', 0)}% |
-| **Proposed Installment** | ${row.get('installment', 0):,.2f} | **Total Credit Utilization** | {row.get('all_util', 0)}% |
+| **FICO Score** | {row.get('fico_score', 'N/A')} | **Total Bankcard Limit** | ${safe_float(row.get('total_bc_limit', 0), 0):,.2f} |
+| **Annual Income** | ${safe_float(row.get('annual_inc', 0), 0):,.2f} | **Bankcard Utilization** | {row.get('bc_util', 0)}% |
+| **Proposed Installment** | ${safe_float(row.get('installment', 0), 0):,.2f} | **Total Credit Utilization** | {row.get('all_util', 0)}% |
 | **Debt-to-Income (DTI)** | {row.get('dti', 0)}% | **Inquiries (Last 12m)** | {row.get('inq_last_12m', 0)} |
     """
+
+# Utility function for the report block below
+def safe_float(val, fallback):
+    try:
+        return float(val)
+    except (ValueError, TypeError):
+        return fallback
 
 # =============================================================================
 # SIDEBAR
