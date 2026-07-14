@@ -1,36 +1,29 @@
 """
 main.py
 
-Main entry point for the Credit Risk Scorecard application.
-
-Author: Your Name
+Batch-Processing Entry Point for the Credit Risk Scorecard Platform.
+Allows users to upload a CSV/Excel file of applicants and generate scorecard decisions.
 """
 
 from __future__ import annotations
 
+import os
+import math
 import streamlit as st
+import pandas as pd
 
-# Removed the "app." prefix since we are already inside the app folder
 from config import (
     APP_NAME,
     APP_ICON,
     LAYOUT,
+    DEFAULT_VALUES
 )
-
 from services import (
     load_artifacts,
     PredictionService,
-    validate_inputs,
-    ModelMetadataService,
 )
-
-from components import (
-    render_sidebar,
-    render_applicant_form,
-    render_metrics,
-    render_prediction_card,
-    render_footer,
-)
+from models.applicant import Applicant
+from pydantic import ValidationError
 
 # =============================================================================
 # PAGE CONFIGURATION
@@ -44,125 +37,253 @@ st.set_page_config(
 )
 
 # =============================================================================
-# LOAD MODEL ARTIFACTS
-# =============================================================================
-
-try:
-    artifacts = load_artifacts()
-
-except Exception as e:
-
-    st.error("Failed to load model artifacts.")
-
-    st.exception(e)
-
-    st.stop()
-
-# =============================================================================
 # INITIALIZE SERVICES
 # =============================================================================
 
-predictor = PredictionService(artifacts)
+@st.cache_resource
+def get_prediction_service():
+    """Caches the model loading so it doesn't reload on every UI click."""
+    try:
+        artifacts = load_artifacts()
+        return PredictionService(artifacts)
+    except Exception as e:
+        st.error(f"Failed to load model artifacts: {e}")
+        st.stop()
 
-metadata = ModelMetadataService(
-    artifacts.metadata
-)
+predictor = get_prediction_service()
+
+# =============================================================================
+# HELPER FUNCTIONS
+# =============================================================================
+
+def process_batch(df: pd.DataFrame) -> pd.DataFrame:
+    """Processes a dataframe of applicants through the prediction pipeline."""
+    results = []
+    
+    # 0. Ensure revol_util exists (the raw dataset uses revol_util_pct)
+    if 'revol_util' not in df.columns and 'revol_util_pct' in df.columns:
+        df['revol_util'] = df['revol_util_pct']
+    
+    for idx, row in df.iterrows():
+        app_dict = row.to_dict()
+        
+        # 1. Fill missing required dummy fields with defaults from config to avoid pipeline crashes
+        for key, default_val in DEFAULT_VALUES.items():
+            if key not in app_dict or pd.isna(app_dict[key]):
+                app_dict[key] = default_val
+
+        # 2. Dynamically calculate installment_income_ratio if missing
+        if 'installment_income_ratio' not in app_dict or pd.isna(app_dict['installment_income_ratio']):
+            annual_inc = app_dict.get('annual_inc', 0)
+            installment = app_dict.get('installment', 0)
+            app_dict['installment_income_ratio'] = (installment / annual_inc) if annual_inc > 0 else 0.0
+            
+        # 3. Apply Boundary Clamps (so real-world outliers don't trip strict Pydantic rules)
+        app_dict['dti'] = min(max(app_dict.get('dti', 20.0), 0.0), 100.0)
+        app_dict['all_util'] = min(max(app_dict.get('all_util', 50.0), 0.0), 200.0)
+        app_dict['bc_util'] = min(max(app_dict.get('bc_util', 50.0), 0.0), 200.0)
+        app_dict['revol_util'] = min(max(app_dict.get('revol_util', 50.0), 0.0), 200.0)
+        app_dict['emp_length_years'] = min(max(app_dict.get('emp_length_years', 5), 0), 50)
+        
+        # 4. Final NaN sweep (Pydantic crashes if it encounters a NaN float for a required field)
+        for k, v in app_dict.items():
+            if isinstance(v, float) and math.isnan(v):
+                app_dict[k] = 0
+
+        # 5. Predict
+        try:
+            applicant = Applicant(**app_dict)
+            pred = predictor.predict(applicant)
+            
+            app_dict['Probability of Default'] = f"{pred.probability:.2%}"
+            app_dict['Credit Score'] = pred.score
+            app_dict['Risk Band'] = pred.risk_band
+            app_dict['Decision'] = pred.decision
+            
+        except ValidationError as e:
+            failed_field = str(e).split('\n')[1] if '\n' in str(e) else "Unknown"
+            app_dict['Probability of Default'] = "Error"
+            app_dict['Credit Score'] = "Error"
+            app_dict['Risk Band'] = "Invalid Data"
+            app_dict['Decision'] = f"Validation Failed: {failed_field}"
+            
+        results.append(app_dict)
+        
+    return pd.DataFrame(results)
+
+
+def create_executive_summary(df: pd.DataFrame) -> pd.DataFrame:
+    """Extracts the most important columns for the executive summary."""
+    columns_to_show = [
+        'id', 'fico_score', 'annual_inc', 'tot_cur_bal', 'home_ownership', 
+        'Credit Score', 'Probability of Default', 'Risk Band', 'Decision'
+    ]
+    # Only keep columns that actually exist in the dataframe
+    existing_cols = [c for c in columns_to_show if c in df.columns]
+    
+    summary = df[existing_cols].copy()
+    
+    # Rename columns for presentation
+    summary.rename(columns={
+        'id': 'Applicant ID',
+        'fico_score': 'FICO',
+        'annual_inc': 'Income ($)',
+        'tot_cur_bal': 'Total Balance ($)',
+        'home_ownership': 'Home Ownership'
+    }, inplace=True)
+    
+    return summary
+
+
+def create_final_report(row: pd.Series) -> str:
+    """Generates a Markdown executive report for a specific customer."""
+    
+    # Format the header based on the risk band
+    band = row.get('Risk Band', 'Unknown')
+    if band == "Low":
+        tier_color = "🟢"
+    elif band == "Medium":
+        tier_color = "🟡"
+    else:
+        tier_color = "🔴"
+        
+    return f"""
+### {tier_color} Applicant ID: {row.get('id', 'N/A')}
+**Decision:** {row.get('Decision', 'N/A')}  |  **Probability of Default:** {row.get('Probability of Default', 'N/A')}  |  **Credit Score:** {row.get('Credit Score', 'N/A')}
+
+| **Financial Profile** | **Details** | **Credit Behavior** | **Details** |
+|-----------------------|-------------|---------------------|-------------|
+| **FICO Score** | {row.get('fico_score', 'N/A')} | **Total Bankcard Limit** | ${row.get('total_bc_limit', 0):,.2f} |
+| **Annual Income** | ${row.get('annual_inc', 0):,.2f} | **Bankcard Utilization** | {row.get('bc_util', 0)}% |
+| **Proposed Installment** | ${row.get('installment', 0):,.2f} | **Total Credit Utilization** | {row.get('all_util', 0)}% |
+| **Debt-to-Income (DTI)** | {row.get('dti', 0)}% | **Inquiries (Last 12m)** | {row.get('inq_last_12m', 0)} |
+    """
 
 # =============================================================================
 # SIDEBAR
 # =============================================================================
 
-render_sidebar(artifacts.metadata)
+st.sidebar.title("💳 Batch Credit Evaluation")
+
+uploaded_file = st.sidebar.file_uploader("Upload Applicants (CSV or Excel)", type=["csv", "xlsx"])
+
+st.sidebar.markdown("""
+### User Guide:
+
+This platform allows you to evaluate multiple loan applicants at once using the Logistic Scorecard Model.
+
+1. **Upload a File**:
+   - Upload a CSV or Excel file containing applicant data.
+   - If you don't upload a file, the app will auto-load your local test dataset.
+
+2. **View Batch Data**:
+   - The raw data will be displayed in the first table.
+
+3. **Automated Predictions**:
+   - The app instantly runs the pipeline, calculating the Probability of Default (PD), Credit Score, Risk Band, and Final Decision.
+
+4. **Executive Summary**:
+   - Filter applicants by risk band to quickly isolate high or low-risk decisions.
+
+5. **Individual Customer Report**:
+   - Use the row index selector at the bottom to generate a detailed, printable Markdown report for any specific applicant in the batch.
+""")
 
 # =============================================================================
-# HEADER
+# MAIN UI
 # =============================================================================
 
-st.title("Credit Risk Scorecard Evaluation")
+st.title("Predicting Credit Risk & Loan Approvals")
 
-st.markdown(
-    """
-Predict the probability of default (PD) and calculate an
-application credit score using the production logistic scorecard.
-"""
+# 1. Load Data
+if uploaded_file is not None:
+    if uploaded_file.name.endswith('.csv'):
+        raw_data = pd.read_csv(uploaded_file)
+    else:
+        raw_data = pd.read_excel(uploaded_file)
+    st.success(f"Successfully loaded {len(raw_data):,} applicants from {uploaded_file.name}")
+else:
+    # Attempt to automatically find the 'test_applicants.csv' we generated earlier
+    app_dir = os.path.dirname(__file__)
+    project_root = os.path.dirname(app_dir)
+    
+    file_in_root = os.path.join(project_root, "test_applicants.csv")
+    file_in_app = os.path.join(app_dir, "test_applicants.csv")
+    
+    if os.path.exists(file_in_root):
+        raw_data = pd.read_csv(file_in_root)
+        st.info(f"No file uploaded. Automatically loaded test data ({len(raw_data):,} applicants).")
+    elif os.path.exists(file_in_app):
+        raw_data = pd.read_csv(file_in_app)
+        st.info(f"No file uploaded. Automatically loaded test data ({len(raw_data):,} applicants).")
+    else:
+        st.warning("No file uploaded and 'test_applicants.csv' not found. Using fallback sample data.")
+        
+        raw_data = pd.DataFrame([
+            {**DEFAULT_VALUES, "id": 10001, "fico_score": 780, "annual_inc": 120000, "installment": 400, "dti": 12.5, "all_util": 15.0, "bc_util": 10.0, "total_bc_limit": 55000, "inq_last_12m": 0},
+            {**DEFAULT_VALUES, "id": 10002, "fico_score": 670, "annual_inc": 65000, "installment": 600, "dti": 25.0, "all_util": 45.0, "bc_util": 50.0, "total_bc_limit": 15000, "inq_last_12m": 2},
+            {**DEFAULT_VALUES, "id": 10003, "fico_score": 580, "annual_inc": 45000, "installment": 800, "dti": 40.0, "all_util": 85.0, "bc_util": 90.0, "total_bc_limit": 5000, "inq_last_12m": 6},
+        ])
+
+# --- CRITICAL FIX: RANDOM SAMPLE TO AVOID MESSAGE SIZE ERROR ---
+if len(raw_data) > 100:
+    st.warning(f"⚠️ Dataset contains {len(raw_data):,} applicants. Randomly sampling 100 applicants to prevent browser memory limits.")
+    # Use .sample(n=100) to get a random mix, then .reset_index() so the row numbers look clean in the UI
+    raw_data = raw_data.sample(n=100).reset_index(drop=True)
+
+# 2. Display Raw Data
+st.subheader("Raw Applicant Data")
+st.dataframe(raw_data, use_container_width=True)
+
+# 3. Process Predictions
+with st.spinner("Scoring applicants via ML Pipeline..."):
+    results_df = process_batch(raw_data)
+
+st.divider()
+
+# 4. Display Full Results
+st.subheader("Results: Full Evaluation Output")
+st.dataframe(results_df, use_container_width=True)
+
+st.divider()
+
+# =============================================================================
+# FILTERED EXECUTIVE SUMMARY & INDIVIDUAL REPORT
+# =============================================================================
+
+st.subheader("Executive Summary")
+
+# --- NEW RISK FILTER BUTTONS ---
+risk_filter = st.radio(
+    "Filter applicants by Risk Band:",
+    options=["All", "Low", "Medium", "High", "Invalid Data"],
+    horizontal=True
 )
 
-st.divider()
+# Filter the dataframe based on the button selection
+if risk_filter != "All":
+    filtered_df = results_df[results_df['Risk Band'] == risk_filter].reset_index(drop=True)
+else:
+    filtered_df = results_df.reset_index(drop=True)
 
-# =============================================================================
-# MODEL INFORMATION
-# =============================================================================
-
-col1, col2, col3, col4 = st.columns(4)
-
-with col1:
-
-    st.metric(
-        "Model",
-        metadata.model_name,
-    )
-
-with col2:
-
-    st.metric(
-        "Version",
-        metadata.version,
-    )
-
-with col3:
-
-    auc = metadata.auc
-
-    st.metric(
-        "ROC AUC",
-        "-" if auc is None else f"{auc:.3f}",
-    )
-
-with col4:
-
-    ks = metadata.ks
-
-    st.metric(
-        "KS Statistic",
-        "-" if ks is None else f"{ks:.3f}",
-    )
+# 5. Display the filtered Executive Summary
+executive_summary = create_executive_summary(filtered_df)
+st.dataframe(executive_summary, use_container_width=True)
 
 st.divider()
 
-# =============================================================================
-# CREDIT APPLICATION FORM
-# =============================================================================
+# 6. Final Report Generator
+st.subheader("Individual Applicant Report")
 
-applicant = render_applicant_form()
+# Safety check in case a filter returns 0 results
+if len(filtered_df) == 0:
+    st.info(f"No applicants found in the '{risk_filter}' risk band.")
+else:
+    st.write(f"Enter the row index (0 to {len(filtered_df) - 1}) to view a detailed breakdown for a specific applicant in this view.")
+    
+    max_index = len(filtered_df) - 1
+    row_index = st.number_input("Row Index:", min_value=0, max_value=max_index, value=0, step=1)
 
-# =============================================================================
-# RUN PREDICTION
-# =============================================================================
-
-if applicant is not None:
-    try:
-        validate_inputs(applicant)
-
-        with st.spinner("Scoring applicant..."):
-            result = predictor.predict(applicant)
-            # Save the result to session state so the Chatbot page can read it!
-            st.session_state.current_prediction = result
-
-        st.divider()
-        st.subheader("Prediction Results")
-        render_metrics(result)
-        st.write("")
-        render_prediction_card(result)
-
-    except ValueError as e:
-        st.warning(str(e))
-    except Exception as e:
-        st.error("Prediction failed.")
-        st.exception(e)
-
-# =============================================================================
-# FOOTER
-# =============================================================================
-
-render_footer()
-
+    # Generate and display the markdown report for the selected row
+    final_report = create_final_report(filtered_df.iloc[row_index])
+    st.markdown(final_report)
