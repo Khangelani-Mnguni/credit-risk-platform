@@ -62,6 +62,10 @@ if "sample_seed" not in st.session_state:
 # HELPER FUNCTIONS
 # =============================================================================
 
+# --- CRITICAL FIX: CACHE THE BATCH PROCESSING ---
+# This prevents the ML pipeline from re-running when switching pages.
+# It will ONLY re-run if the 'df' input changes (new file or randomized data).
+@st.cache_data(show_spinner="Scoring applicants via ML Pipeline...")
 def process_batch(df: pd.DataFrame) -> pd.DataFrame:
     """Processes a dataframe of applicants through the prediction pipeline."""
     results = []
@@ -78,8 +82,7 @@ def process_batch(df: pd.DataFrame) -> pd.DataFrame:
             if key not in app_dict or pd.isna(app_dict[key]):
                 app_dict[key] = default_val
 
-        # --- CRITICAL FIX: Safe float casting ---
-        # Ensures that if a CSV has a string like "50.0", it becomes a real number
+        # Safe float casting ensures that strings like "50.0" become a real number
         def safe_float(val, fallback):
             try:
                 return float(val)
@@ -301,9 +304,10 @@ raw_data = raw_data.sample(n=sample_size, random_state=st.session_state.sample_s
 st.subheader("Raw Applicant Data")
 st.dataframe(raw_data, use_container_width=True)
 
-# 3. Process Predictions
-with st.spinner("Scoring applicants via ML Pipeline..."):
-    results_df = process_batch(raw_data)
+# 3. Process Predictions (CACHED)
+# We removed the `with st.spinner()` block here because we injected the spinner 
+# directly into the @st.cache_data decorator at the top of the file!
+results_df = process_batch(raw_data)
 
 st.divider()
 
