@@ -51,7 +51,7 @@ class CreditRiskAgent:
     • FAISS
     """
 
-    DEFAULT_RECURSION_LIMIT = 8
+    DEFAULT_RECURSION_LIMIT = 25
 
     def __init__(self) -> None:
 
