@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 import math
+import random
 import streamlit as st
 import pandas as pd
 
@@ -37,7 +38,7 @@ st.set_page_config(
 )
 
 # =============================================================================
-# INITIALIZE SERVICES
+# INITIALIZE SERVICES & STATE
 # =============================================================================
 
 @st.cache_resource
@@ -51,6 +52,11 @@ def get_prediction_service():
         st.stop()
 
 predictor = get_prediction_service()
+
+# Initialize a random seed in session state to prevent the data from 
+# shuffling every time the user interacts with a UI widget (like a filter)
+if "sample_seed" not in st.session_state:
+    st.session_state.sample_seed = 42
 
 # =============================================================================
 # HELPER FUNCTIONS
@@ -162,7 +168,7 @@ def create_final_report(row: pd.Series) -> str:
     else:
         tier_color = "🔴"
         
-    report = f"""
+    return f"""
 ### {tier_color} Applicant ID: {row.get('id', 'N/A')}
 **Decision:** {row.get('Decision', 'N/A')}  |  **Probability of Default:** {row.get('Probability of Default', 'N/A')}  |  **Credit Score:** {row.get('Credit Score', 'N/A')}
 
@@ -173,7 +179,6 @@ def create_final_report(row: pd.Series) -> str:
 | **Proposed Installment** | ${safe_float(row.get('installment', 0), 0):,.2f} | **Total Credit Utilization** | {row.get('all_util', 0)}% |
 | **Debt-to-Income (DTI)** | {row.get('dti', 0)}% | **Inquiries (Last 12m)** | {row.get('inq_last_12m', 0)} |
     """
-    return report
 
 # Utility function for the report block below
 def safe_float(val, fallback):
@@ -200,8 +205,8 @@ This platform allows you to evaluate multiple loan applicants at once using the 
    - Upload a CSV, TXT (comma or semicolon separated), or Excel file containing applicant data.
    - If you don't upload a file, the app will auto-load your local test dataset.
 
-2. **View Batch Data**:
-   - The raw data will be displayed in the first table.
+2. **Select Sample Size**:
+   - Choose how many applicants to score to prevent memory limits, and randomize the selection at any time.
 
 3. **Automated Predictions**:
    - The app instantly runs the pipeline, calculating the Probability of Default (PD), Credit Score, Risk Band, and Final Decision.
@@ -265,11 +270,32 @@ if raw_data is None or len(raw_data) == 0:
         {**DEFAULT_VALUES, "id": 10003, "fico_score": 580, "annual_inc": 45000, "installment": 800, "dti": 40.0, "all_util": 85.0, "bc_util": 90.0, "total_bc_limit": 5000, "inq_last_12m": 6},
     ])
 
-# --- CRITICAL FIX: RANDOM SAMPLE TO AVOID MESSAGE SIZE ERROR ---
-if len(raw_data) > 100:
-    st.warning(f"⚠️ Dataset contains {len(raw_data):,} applicants. Randomly sampling 100 applicants to prevent browser memory limits.")
-    # Use .sample(n=100) to get a random mix, then .reset_index() so the row numbers look clean in the UI
-    raw_data = raw_data.sample(n=100).reset_index(drop=True)
+# =============================================================================
+# DATA SAMPLING & RANDOMIZATION UI
+# =============================================================================
+st.divider()
+st.subheader("⚙️ Data Sampling & Randomization")
+st.info("💡 **Recommendation:** We recommend evaluating **100 applicants or fewer** at a time to prevent browser memory limits (MessageSizeError) and ensure fast scorecard processing.")
+
+col_samp1, col_samp2 = st.columns([1, 1])
+
+with col_samp1:
+    sample_size = st.number_input(
+        "Number of applicants to evaluate:", 
+        min_value=1, 
+        max_value=len(raw_data), 
+        value=min(100, len(raw_data)), 
+        step=1
+    )
+
+with col_samp2:
+    # Use HTML to vertically align the button with the input field
+    st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
+    if st.button("🔀 Randomize Selection", use_container_width=True):
+        st.session_state.sample_seed = random.randint(0, 1000000)
+
+# Apply the sampling (using the locked session seed)
+raw_data = raw_data.sample(n=sample_size, random_state=st.session_state.sample_seed).reset_index(drop=True)
 
 # 2. Display Raw Data
 st.subheader("Raw Applicant Data")
